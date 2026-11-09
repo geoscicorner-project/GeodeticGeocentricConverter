@@ -12,6 +12,6 @@ hasProcessingProvider=no
 experimental=False
 
 license=GPL-2.0-or-later
-homepage=https://github.com/geoscicorner-project/Geodetic-Geocentric-Converter
-repository=https://github.com/geoscicorner-project/Geodetic-Geocentric-Converter
-tracker=https://github.com/geoscicorner-project/Geodetic-Geocentric-Converter/issues
+homepage=https://github.com/geoscicorner-project/GeodeticGeocentricConverter
+repository=https://github.com/geoscicorner-project/GeodeticGeocentricConverter
+tracker=https://github.com/geoscicorner-project/GeodeticGeocentricConverter/issues
