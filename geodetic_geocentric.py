@@ -46,6 +46,7 @@ class ConverterDialog(QDialog):
         # monitors must not trigger an unsolicited resize or recenter operation.
         self._initial_screen_fit_done = False
         self._tracked_screen = None
+        self._screen_signal_connected = False
         self.setMinimumSize(760, 520)
         self.setSizeGripEnabled(True)
         self._build_ui()
@@ -53,26 +54,22 @@ class ConverterDialog(QDialog):
         self._calculate()
 
     def _screen_for_dialog(self):
-        try:
-            handle = self.windowHandle()
-            if handle is not None and handle.screen() is not None:
-                return handle.screen()
-        except Exception:
-            pass
-        parent = self.parentWidget()
-        if parent is not None:
-            try:
-                screen = QGuiApplication.screenAt(parent.frameGeometry().center())
-                if screen is not None:
-                    return screen
-            except Exception:
-                pass
-        try:
-            screen = self.screen()
+        """Return the screen currently containing this dialog or its parent."""
+        handle = self.windowHandle()
+        if handle is not None:
+            screen = handle.screen()
             if screen is not None:
                 return screen
-        except Exception:
-            pass
+
+        parent = self.parentWidget()
+        if parent is not None:
+            screen = QGuiApplication.screenAt(parent.frameGeometry().center())
+            if screen is not None:
+                return screen
+
+        screen = self.screen()
+        if screen is not None:
+            return screen
         return QGuiApplication.primaryScreen()
 
     def _fit_initial_to_available_screen(self):
@@ -123,12 +120,10 @@ class ConverterDialog(QDialog):
         super(ConverterDialog, self).showEvent(event)
         if not self._initial_screen_fit_done:
             QTimer.singleShot(0, self._fit_initial_to_available_screen)
-        try:
-            handle = self.windowHandle()
-            if handle is not None:
-                handle.screenChanged.connect(self._on_dialog_screen_changed)
-        except Exception:
-            pass
+        handle = self.windowHandle()
+        if handle is not None and not self._screen_signal_connected:
+            handle.screenChanged.connect(self._on_dialog_screen_changed)
+            self._screen_signal_connected = True
 
     def _spin(self, value=0.0, decimals=6, minimum=-1e12, maximum=1e12, step=1.0):
         s = QDoubleSpinBox(); s.setDecimals(decimals); s.setRange(minimum, maximum); s.setSingleStep(step)
@@ -297,14 +292,17 @@ class ConverterDialog(QDialog):
 
     def _load_ellipsoids(self):
         self._ellipsoid_data = []
-        try:
-            defs = QgsEllipsoidUtils.definitions()
-            for d in defs:
-                p = d.parameters
-                if p.valid and p.semiMajor > 0 and p.semiMinor > 0:
-                    self._ellipsoid_data.append((d.acronym, d.description, p.semiMajor, p.inverseFlattening, p.semiMinor))
-        except Exception:
-            pass
+        defs = QgsEllipsoidUtils.definitions()
+        for definition in defs:
+            parameters = definition.parameters
+            if parameters.valid and parameters.semiMajor > 0 and parameters.semiMinor > 0:
+                self._ellipsoid_data.append((
+                    definition.acronym,
+                    definition.description,
+                    parameters.semiMajor,
+                    parameters.inverseFlattening,
+                    parameters.semiMinor
+                ))
         self._ellipsoid_data.sort(key=lambda x: (0 if x[0] == 'EPSG:7030' else 1, x[1].lower()))
         self.ellipsoid_combo.blockSignals(True)
         self.ellipsoid_combo.addItem('QGIS project ellipsoid', '__PROJECT__')
@@ -327,14 +325,16 @@ class ConverterDialog(QDialog):
         key = self.ellipsoid_combo.currentData()
         if key == '__PROJECT__':
             key = QgsProject.instance().ellipsoid()
-        try:
-            params = QgsEllipsoidUtils.ellipsoidParameters(key)
-            if params.valid and params.semiMajor > 0 and params.inverseFlattening > 1:
-                self.a_spin.blockSignals(True); self.invf_spin.blockSignals(True)
-                self.a_spin.setValue(params.semiMajor); self.invf_spin.setValue(params.inverseFlattening)
-                self.a_spin.blockSignals(False); self.invf_spin.blockSignals(False)
-        except Exception:
-            pass
+        params = QgsEllipsoidUtils.ellipsoidParameters(key)
+        if params.valid and params.semiMajor > 0 and params.inverseFlattening > 1:
+            self.a_spin.blockSignals(True)
+            self.invf_spin.blockSignals(True)
+            try:
+                self.a_spin.setValue(params.semiMajor)
+                self.invf_spin.setValue(params.inverseFlattening)
+            finally:
+                self.a_spin.blockSignals(False)
+                self.invf_spin.blockSignals(False)
         self._update_ellipsoid_labels(); self._calculate()
 
     def _ellipsoid_manual_changed(self, *_):
